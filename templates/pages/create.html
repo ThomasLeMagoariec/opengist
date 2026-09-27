@@ -70,12 +70,12 @@
                         </label>
                         <select name="expire" id="expire" class="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
                                 _="on change if my value is 'custom' remove .hidden from #expire_at else add .hidden to #expire_at end">
-                            <option value="never" {{ if or (not .dto.Expire) (eq (toStr .dto.Expire) "never") }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-never" }}</option>
-                            <option value="1hour" {{ if eq (toStr .dto.Expire) "1hour" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-1hour" }}</option>
+                            <option value="1hour" {{ if or (not .dto.Expire) (eq (toStr .dto.Expire) "1hour") }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-1hour" }}</option>
                             <option value="12hours" {{ if eq (toStr .dto.Expire) "12hours" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-12hours" }}</option>
                             <option value="1day" {{ if eq (toStr .dto.Expire) "1day" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-1day" }}</option>
                             <option value="7days" {{ if eq (toStr .dto.Expire) "7days" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-7days" }}</option>
                             <option value="15days" {{ if eq (toStr .dto.Expire) "15days" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-15days" }}</option>
+                            <option value="never" {{ if eq (toStr .dto.Expire) "never" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-never" }}</option>
                             <option value="custom" {{ if eq (toStr .dto.Expire) "custom" }}selected{{ end }}>{{ .locale.Tr "gist.new.expire-custom" }}</option>
                         </select>
                         <input type="datetime-local" name="expire_at" id="expire_at" value="{{ .dto.ExpireAt }}" class="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm {{ if ne (toStr .dto.Expire) "custom" }}hidden{{ end }}">
