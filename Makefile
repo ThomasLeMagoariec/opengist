@@ -48,8 +48,10 @@ package_webdist:
 
 build_docker:
 	@echo "Building Docker image..."
-	docker buildx build --platform linux/amd64,linux/arm64 -t git.la-banquise.fr/thomas.le-maogariec/$(BINARY_NAME):latest .
-
+	docker buildx build \
+		--platform linux/arm64 \
+		-t git.la-banquise.fr/thomas.le-maogariec/$(BINARY_NAME):arm64 \
+		--load .
 build_dev_docker:
 	@echo "Building Docker image..."
 	docker build -t $(BINARY_NAME)-dev:latest --target dev .
