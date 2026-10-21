@@ -16,6 +16,28 @@ import (
 	"gorm.io/gorm"
 )
 
+const oauthInvitationSessionKey = "oauthInvitation"
+
+// allowed is false after a rejection, even when writing the redirect succeeds.
+func allowOauthSignup(ctx *context.Context) (*db.Invitation, bool, error) {
+	invitationID, ok := ctx.GetSession().Values[oauthInvitationSessionKey].(uint)
+	if ok {
+		invitation, err := db.GetInvitationByID(invitationID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, false, ctx.ErrorRes(500, "Cannot check for invitation code", err)
+		}
+		if err == nil && invitation.IsUsable() {
+			return invitation, true, nil
+		}
+	}
+
+	if ctx.GetData("DisableSignup") == true {
+		ctx.AddFlash(ctx.Tr("error.signup-disabled"), "error")
+		return nil, false, ctx.Redirect(302, "/-/login")
+	}
+	return nil, true, nil
+}
+
 func Oauth(ctx *context.Context) error {
 	providerStr := ctx.Param("provider")
 
@@ -73,8 +95,14 @@ func OauthCallback(ctx *context.Context) error {
 	if currUser != nil {
 		// check if this OAuth account is already linked to another user
 		if existingUser, err := db.GetUserByProvider(user.UserID, provider.GetProvider()); err == nil && existingUser != nil {
-			ctx.AddFlash(ctx.Tr("flash.auth.oauth-already-linked", config.C.OIDCProviderName), "error")
-			return ctx.RedirectTo("/-/settings")
+			if existingUser.ID != currUser.ID {
+				ctx.AddFlash(ctx.Tr("flash.auth.oauth-already-linked", config.C.OIDCProviderName), "error")
+				return ctx.RedirectTo("/-/settings")
+			}
+
+			// the account is already linked to the user currently logged in:
+			// this is a re-authentication, not a link attempt
+			return ctx.RedirectTo("/")
 		}
 
 		provider.UpdateUserDB(currUser)
@@ -90,9 +118,8 @@ func OauthCallback(ctx *context.Context) error {
 	userDB, err := db.GetUserByProvider(user.UserID, provider.GetProvider())
 	// if user is not in database, redirect to OAuth registration page
 	if err != nil {
-		if ctx.GetData("DisableSignup") == true {
-			ctx.AddFlash(ctx.Tr("error.signup-disabled"), "error")
-			return ctx.Redirect(302, "/-/login")
+		if _, allowed, err := allowOauthSignup(ctx); err != nil || !allowed {
+			return err
 		}
 
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -134,9 +161,8 @@ func OauthCallback(ctx *context.Context) error {
 }
 
 func OauthRegister(ctx *context.Context) error {
-	if ctx.GetData("DisableSignup") == true {
-		ctx.AddFlash(ctx.Tr("error.signup-disabled"), "error")
-		return ctx.Redirect(302, "/-/login")
+	if _, allowed, err := allowOauthSignup(ctx); err != nil || !allowed {
+		return err
 	}
 
 	sess := ctx.GetSession()
@@ -152,9 +178,9 @@ func OauthRegister(ctx *context.Context) error {
 }
 
 func ProcessOauthRegister(ctx *context.Context) error {
-	if ctx.GetData("DisableSignup") == true {
-		ctx.AddFlash(ctx.Tr("error.signup-disabled"), "error")
-		return ctx.Redirect(302, "/-/login")
+	invitation, allowed, err := allowOauthSignup(ctx)
+	if err != nil || !allowed {
+		return err
 	}
 
 	sess := ctx.GetSession()
@@ -243,6 +269,11 @@ func ProcessOauthRegister(ctx *context.Context) error {
 		userDB.IsAdmin = true
 		_ = userDB.Update()
 	}
+	if invitation != nil {
+		if err := invitation.Use(); err != nil {
+			return ctx.ErrorRes(500, "Cannot use invitation", err)
+		}
+	}
 
 	keys, err := callbackProvider.GetProviderUserSSHKeys()
 	if err != nil {
@@ -268,6 +299,7 @@ func ProcessOauthRegister(ctx *context.Context) error {
 	delete(sess.Values, "oauthEmail")
 	delete(sess.Values, "oauthAvatarURL")
 	delete(sess.Values, "oauthIsAdmin")
+	delete(sess.Values, oauthInvitationSessionKey)
 
 	sess.Values["user"] = userDB.ID
 	sess.Options.MaxAge = 60 * 60 * 24 * 365 // 1 year
